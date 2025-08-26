@@ -140,7 +140,7 @@ with col_b:
         # Reset all state and restart
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
 
 # =============================
 # Main quiz body
@@ -149,7 +149,7 @@ if st.session_state.phase == "asking":
     question = st.session_state.current_q
     if question is None:
         start_question()
-        st.experimental_rerun()
+        st.rerun()
 
     st.subheader("問題")
     st.write(f"意味: **{question['meaning']}**")
@@ -166,7 +166,7 @@ if st.session_state.phase == "asking":
     # If time is up and still in asking phase, move to timeout feedback
     if remaining <= 0:
         handle_timeout()
-        st.experimental_rerun()
+        st.rerun()
 
     # Choices (4 buttons in two rows)
     disabled = False
@@ -179,25 +179,25 @@ if st.session_state.phase == "asking":
     with col1:
         if st.button(options[0], use_container_width=True, disabled=disabled):
             handle_answer(options[0])
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if len(options) > 1 and st.button(options[1], use_container_width=True, disabled=disabled):
             handle_answer(options[1])
-            st.experimental_rerun()
+            st.rerun()
 
     col3, col4 = st.columns(2)
     with col3:
         if len(options) > 2 and st.button(options[2], use_container_width=True, disabled=disabled):
             handle_answer(options[2])
-            st.experimental_rerun()
+            st.rerun()
     with col4:
         if len(options) > 3 and st.button(options[3], use_container_width=True, disabled=disabled):
             handle_answer(options[3])
-            st.experimental_rerun()
+            st.rerun()
 
     # Auto-refresh every second to update countdown while asking
     time.sleep(1)
-    st.experimental_rerun()
+    st.rerun()
 
 elif st.session_state.phase == "feedback":
     question = st.session_state.current_q
@@ -218,7 +218,7 @@ elif st.session_state.phase == "feedback":
     st.divider()
     if st.button("次の問題へ ➡️", use_container_width=True):
         go_next_question()
-        st.experimental_rerun()
+        st.rerun()
 
 elif st.session_state.phase == "finished":
     total = len(st.session_state.questions)
@@ -258,7 +258,7 @@ elif st.session_state.phase == "finished":
         # Reset and start again
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.experimental_rerun()
+        st.rerun()
 
 # =============================
 # Tips and possible improvements (not interactive)
