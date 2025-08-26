@@ -5,6 +5,10 @@ import csv
 import io
 from typing import List, Dict
 
+# Add compatibility for Streamlit versions where experimental_rerun was renamed to rerun
+if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
+    st.experimental_rerun = st.rerun
+
 # =============================
 # App configuration
 # =============================
