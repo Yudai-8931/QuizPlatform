@@ -56,6 +56,24 @@ def build_choices_for_question(correct_word: str) -> List[str]:
     return options
 
 
+def render_colored_option(label: str, variant: str) -> None:
+    """Render a non-clickable colored option block.
+
+    variant: 'correct' | 'wrong' | 'neutral'
+    """
+    bg = "#28a745" if variant == "correct" else ("#dc3545" if variant == "wrong" else "#f0f2f6")
+    fg = "white" if variant in ("correct", "wrong") else "#262730"
+    st.markdown(
+        f"""
+        <div style="padding:0.6rem 1rem;border-radius:8px;border:1px solid #d9d9d9;
+        background:{bg};color:{fg};font-weight:600;text-align:center;">
+            {label}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def start_question() -> None:
     """Prepare session state for the current question or finish the quiz."""
     if st.session_state.q_index >= len(st.session_state.questions):
@@ -69,11 +87,15 @@ def start_question() -> None:
     st.session_state.phase = "asking"
     st.session_state.timed_out = False
     st.session_state.feedback_message = ""
+    st.session_state.selected_word = None
+    st.session_state.revealed = False
+    st.session_state.was_correct = False
 
 
 def handle_answer(selected_word: str) -> None:
-    """Process selected answer and move to feedback phase."""
+    """Process selected answer and keep on the same screen with colored options."""
     correct_word: str = st.session_state.current_q["word"]
+    st.session_state.selected_word = selected_word
     if selected_word == correct_word:
         st.session_state.score += 1
         st.session_state.feedback_message = "✅ 正解！"
@@ -83,17 +105,17 @@ def handle_answer(selected_word: str) -> None:
         st.session_state.review_list.append(st.session_state.current_q)
         st.session_state.was_correct = False
 
-    st.session_state.phase = "feedback"
+    st.session_state.revealed = True
 
 
 def handle_timeout() -> None:
-    """Handle when the time is up without an answer."""
+    """Handle when the time is up without an answer (reveal correct option)."""
     correct_word: str = st.session_state.current_q["word"]
     st.session_state.feedback_message = f"⏰ タイムアップ！ 正解は {correct_word} でした。"
     st.session_state.review_list.append(st.session_state.current_q)
-    st.session_state.phase = "feedback"
     st.session_state.timed_out = True
     st.session_state.was_correct = False
+    st.session_state.revealed = True
 
 
 def go_next_question() -> None:
@@ -113,7 +135,7 @@ if "initialized" not in st.session_state:
     # Shuffle question order for each new run
     st.session_state.questions = random.sample(WORDS, k=len(WORDS))
 
-    # Phase can be: "asking", "feedback", "finished"
+    # Phase can be: "asking", "finished"
     st.session_state.phase = "asking"
     st.session_state.current_q = None
     st.session_state.current_choices = []
@@ -121,6 +143,8 @@ if "initialized" not in st.session_state:
     st.session_state.timed_out = False
     st.session_state.feedback_message = ""
     st.session_state.was_correct = False
+    st.session_state.selected_word = None
+    st.session_state.revealed = False
 
     # Start the first question
     start_question()
@@ -154,71 +178,104 @@ if st.session_state.phase == "asking":
     st.subheader("問題")
     st.write(f"意味: **{question['meaning']}**")
 
-    # Timer UI
-    elapsed: float = time.time() - float(st.session_state.question_start_time)
-    remaining: int = max(0, int(QUESTION_DURATION_SEC - elapsed))
+    # Timer UI (only when not revealed)
+    if not st.session_state.revealed:
+        elapsed: float = time.time() - float(st.session_state.question_start_time)
+        remaining: int = max(0, int(QUESTION_DURATION_SEC - elapsed))
 
-    # Visual countdown using progress bar
-    progress_value: float = min(1.0, max(0.0, (QUESTION_DURATION_SEC - elapsed) / QUESTION_DURATION_SEC))
-    st.progress(progress_value)
-    st.caption(f"残り時間: {remaining} 秒")
+        # Visual countdown using progress bar
+        progress_value: float = min(1.0, max(0.0, (QUESTION_DURATION_SEC - elapsed) / QUESTION_DURATION_SEC))
+        st.progress(progress_value)
+        st.caption(f"残り時間: {remaining} 秒")
 
-    # If time is up and still in asking phase, move to timeout feedback
-    if remaining <= 0:
-        handle_timeout()
+        # If time is up and still in asking phase, move to timeout state
+        if remaining <= 0:
+            handle_timeout()
+            st.rerun()
+
+    # Choices
+    options = st.session_state.current_choices or [question["word"]]
+    correct_word = question["word"]
+    selected_word = st.session_state.selected_word
+
+    if not st.session_state.revealed:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(options[0], use_container_width=True):
+                handle_answer(options[0])
+                st.rerun()
+        with col2:
+            if len(options) > 1 and st.button(options[1], use_container_width=True):
+                handle_answer(options[1])
+                st.rerun()
+
+        col3, col4 = st.columns(2)
+        with col3:
+            if len(options) > 2 and st.button(options[2], use_container_width=True):
+                handle_answer(options[2])
+                st.rerun()
+        with col4:
+            if len(options) > 3 and st.button(options[3], use_container_width=True):
+                handle_answer(options[3])
+                st.rerun()
+
+        # Auto-refresh every second to update countdown while asking
+        time.sleep(1)
         st.rerun()
-
-    # Choices (4 buttons in two rows)
-    disabled = False
-    options = st.session_state.current_choices
-    # Ensure there are at least some options to click
-    if not options:
-        options = [question["word"]]
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(options[0], use_container_width=True, disabled=disabled):
-            handle_answer(options[0])
-            st.rerun()
-    with col2:
-        if len(options) > 1 and st.button(options[1], use_container_width=True, disabled=disabled):
-            handle_answer(options[1])
-            st.rerun()
-
-    col3, col4 = st.columns(2)
-    with col3:
-        if len(options) > 2 and st.button(options[2], use_container_width=True, disabled=disabled):
-            handle_answer(options[2])
-            st.rerun()
-    with col4:
-        if len(options) > 3 and st.button(options[3], use_container_width=True, disabled=disabled):
-            handle_answer(options[3])
-            st.rerun()
-
-    # Auto-refresh every second to update countdown while asking
-    time.sleep(1)
-    st.rerun()
-
-elif st.session_state.phase == "feedback":
-    question = st.session_state.current_q
-
-    # Show feedback message
-    msg = st.session_state.feedback_message
-    if msg.startswith("✅"):
-        st.success(msg)
-    elif "タイムアップ" in msg:
-        st.warning(msg)
     else:
-        st.error(msg)
+        # Show colored, non-clickable options
+        col1, col2 = st.columns(2)
+        with col1:
+            if len(options) >= 1:
+                variant = (
+                    "correct" if options[0] == correct_word else
+                    ("wrong" if options[0] == selected_word and selected_word != correct_word else "neutral")
+                )
+                # Also reveal the correct word if answered wrong or timeout
+                if selected_word and selected_word != correct_word and options[0] == correct_word:
+                    variant = "correct"
+                if st.session_state.timed_out and options[0] == correct_word:
+                    variant = "correct"
+                render_colored_option(options[0], variant)
+        with col2:
+            if len(options) > 1:
+                variant = (
+                    "correct" if options[1] == correct_word else
+                    ("wrong" if options[1] == selected_word and selected_word != correct_word else "neutral")
+                )
+                if selected_word and selected_word != correct_word and options[1] == correct_word:
+                    variant = "correct"
+                if st.session_state.timed_out and options[1] == correct_word:
+                    variant = "correct"
+                render_colored_option(options[1], variant)
+        col3, col4 = st.columns(2)
+        with col3:
+            if len(options) > 2:
+                variant = (
+                    "correct" if options[2] == correct_word else
+                    ("wrong" if options[2] == selected_word and selected_word != correct_word else "neutral")
+                )
+                if selected_word and selected_word != correct_word and options[2] == correct_word:
+                    variant = "correct"
+                if st.session_state.timed_out and options[2] == correct_word:
+                    variant = "correct"
+                render_colored_option(options[2], variant)
+        with col4:
+            if len(options) > 3:
+                variant = (
+                    "correct" if options[3] == correct_word else
+                    ("wrong" if options[3] == selected_word and selected_word != correct_word else "neutral")
+                )
+                if selected_word and selected_word != correct_word and options[3] == correct_word:
+                    variant = "correct"
+                if st.session_state.timed_out and options[3] == correct_word:
+                    variant = "correct"
+                render_colored_option(options[3], variant)
 
-    # Show meaning and the correct word for clarity
-    st.write(f"意味: **{question['meaning']}**")
-    st.write(f"正解: **{question['word']}**")
-
-    st.divider()
-    if st.button("次の問題へ ➡️", use_container_width=True):
-        go_next_question()
-        st.rerun()
+        st.divider()
+        if st.button("次の問題へ ➡️", use_container_width=True):
+            go_next_question()
+            st.rerun()
 
 elif st.session_state.phase == "finished":
     total = len(st.session_state.questions)
